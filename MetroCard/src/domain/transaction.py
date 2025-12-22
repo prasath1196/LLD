@@ -1,6 +1,3 @@
-from constants import TRANSACTION_FEE_PERCENTAGE, DISCOUNT_PERCENTAGE, TICKET_FARE
-
-
 class Transaction:
     def __init__(self, metro_cards):
         self.data = []
@@ -10,7 +7,7 @@ class Transaction:
     def add_jouney_transaction(self, breakdown):
         self.data.append(breakdown)
 
-    def summary(self):
+    def summary_data(self):
         result = {}
         for t in self.data:
             station_name = t["station_name"]
@@ -28,7 +25,19 @@ class Transaction:
             result[station_name]["passenger_count"][p_type] = (
                 result[station_name]["passenger_count"].get(p_type, 0) + 1
             )
-        self.format_summary(result)
+        return result
+
+    def summary_text(self):
+        return self.format_summary(self.summary_data())
+
+    def summary(self):
+        """
+        Backwards-compatible behavior for the CLI path: print the summary.
+        Returns the formatted summary text.
+        """
+        output = self.summary_text()
+        print(output.rstrip("\n"))
+        return output
 
     def format_summary(self, result):
         output = ""
@@ -69,4 +78,4 @@ class Transaction:
 
             output += station_output
 
-        print(output.rstrip("\n"))
+        return output

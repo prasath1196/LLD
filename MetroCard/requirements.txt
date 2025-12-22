@@ -1,1 +1,5 @@
 coverage>=6.0
+fastapi>=0.115.6
+httpx>=0.24
+pytest>=7.0
+uvicorn>=0.34.0
