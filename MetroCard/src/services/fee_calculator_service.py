@@ -1,4 +1,7 @@
 from constants import TRANSACTION_FEE_PERCENTAGE, DISCOUNT_PERCENTAGE, TICKET_FARE
+from src.utils.logger import get_logger
+
+log = get_logger(__name__)
 
 
 class FeeCalculatorService:
@@ -12,7 +15,6 @@ class FeeCalculatorService:
         passenger_type = journey["passenger_type"]
         station_name = journey["station_name"]
 
-        # Increment counter first
         if mcid in transaction.mcid_counter:
             transaction.mcid_counter[mcid] += 1
         else:
@@ -55,4 +57,5 @@ class FeeCalculatorService:
             "transaction_fee_amount": transaction_fee,
             "net_fare": net_charge,
         }
+        log.info(f"Fee breakdown Calculated: {line_item}")
         return line_item

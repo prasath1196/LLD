@@ -1,4 +1,7 @@
 from src.services.fee_calculator_service import FeeCalculatorService
+from src.utils.logger import get_logger
+
+log = get_logger(__name__)
 
 
 class MetroSystemService:
@@ -21,12 +24,15 @@ class MetroSystemService:
 
     def add_card(self, mcid, amount):
         self.metro_card.add_card(mcid, amount)
+        log.info(f"Card {mcid} added with amount {amount}")
 
     def check_in(self, mcid, passenger_type, station_name):
         journey_data = self.journey.add(mcid, passenger_type, station_name)
+        log.info(f"Journey added for card {mcid} at station {station_name}")
         breakdown = self.fee_calculator_service.calculate_fee_breakdown(
             journey_data, self.transaction
         )
+        log.info(f"Fee breakdown Calculated: {breakdown}")
         self.transaction.add_jouney_transaction(breakdown)
         return breakdown
 
@@ -34,4 +40,6 @@ class MetroSystemService:
         return self.transaction.summary()
 
     def get_summary(self):
-        return self.transaction.summary_data()
+        summary_data = self.transaction.summary_data()
+        log.info(f"Summary data: {summary_data}")
+        return summary_data

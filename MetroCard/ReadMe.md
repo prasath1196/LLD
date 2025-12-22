@@ -1,186 +1,94 @@
-## MetroCard (LLD) — CLI + FastAPI
+# MetroCard Fare System (Python/FastAPI Sample)
 
-This repo contains **two ways to run the same MetroCard domain logic**:
-- **CLI mode**: reads commands from a text file and prints the summary to stdout.
-- **API mode (FastAPI)**: exposes minimal endpoints for adding balance, checking in, and retrieving a JSON summary.
+## 🎯 Problem Statement
 
----
+The goal was to build a fare calculation engine for a non-stop metro line between `CENTRAL` and `AIRPORT`. The system manages **MetroCard wallets**, processes **journeys**, and handles **automatic recharges** based on specific business rules.
 
-## Problem statement (concise)
-
-Build a **MetroCard-based fare system** for a **non-stop metro line** between `CENTRAL` and `AIRPORT` (both directions). Each trip is paid using a **MetroCard wallet** identified by a unique card number.
-
-### Fare rules
-- Base fare depends on passenger type: `ADULT` / `SENIOR_CITIZEN` / `KID`.
-- Trips are counted per card; **every 2nd trip** for the same card is a **return journey** and gets **50% discount** on the base fare.
-- If the card has insufficient balance, **auto-recharge exactly the required amount** and charge an additional **2% service fee** on the recharge amount (fee collected at the journey’s origin station).
-
-### Goal / Output
-Process a list of commands (balance loads + check-ins), then print **station-wise summary**:
-- Total collection amount
-- Total discount given
-- Passenger count by type, sorted by count descending; ties by passenger type ascending.
-
-Passenger count is based on **journeys**, not unique people/cards.
+**Core Business Rules:**
+* **Fare Logic:** Fares differ by passenger type (`ADULT`: 200, `SENIOR`: 100, `KID`: 50).
+* **Return Journey Discount:** Every 2nd trip for the same card is a "Return Journey" and receives a **50% discount**.
+* **Auto-Recharge:** If a card has insufficient balance at check-in, it auto-recharges the *exact* required amount plus a **2% transaction fee**.
+* **Reporting:** The system must output a station-wise summary of total collections and passenger counts.
 
 ---
 
-## Pre-requisites
-- **Python**: 3.8 / 3.9
-- **pip**
+## 🏗 Architectural Approach
+
+I designed the system using **Clean Architecture** principles to ensure the core business logic is robust, testable, and completely decoupled from the HTTP delivery layer.
+
+### 1. Layered Design
+* **Domain Layer (`src/domain`):** Pure Python entities (`MetroCard`, `Journey`, `Transaction`) that encapsulate state and enforce data integrity.
+* **Service Layer (`src/services`):** Contains the "Business Rules."
+    * **`FeeCalculatorService`:** A dedicated service for complex pricing logic (discounts, surcharges). It is stateless and easily unit-tested.
+    * **`MetroSystemService`:** Acts as a **Facade**, orchestrating interactions between the Domain entities and the Calculator.
+* **Interface Layer (`src/api`):** The "Delivery Mechanism." It validates inputs using **Pydantic** and delegates work to the Service layer.
+
+### 2. Key Design Decisions
+
+#### **Framework Independence (Hexagonal Architecture)**
+The core services (`MetroSystemService`, `FeeCalculatorService`) have **zero dependencies** on FastAPI or HTTP libraries.
+* *Why:* This ensures the business logic is portable. We can swap the API framework, run it via a background worker, or trigger it from a CLI without rewriting a single line of domain code.
+
+#### **Facade Pattern**
+`MetroSystemService` serves as the single entry point for all operations.
+* *Why:* It hides the complexity of the subsystem (coordinating the generic `Transaction` ledger, `Journey` history, and `FeeCalculator`) from the API controller. The API simply calls `check_in()` and receives the result.
+
+#### **Centralized Error Handling**
+I implemented a Python context manager (`exception_handler`) to wrap service calls.
+* *Why:* It provides a clean, uniform way to map Domain Exceptions (like `ValueError: Invalid Card`) to HTTP responses (404/400) without cluttering the controller logic with `try/except` blocks.
 
 ---
 
-## Quickstart (CLI)
+## 📂 Project Structure
 
-### Install
-```bash
-python3 -m pip install -r requirements.txt
-```
+```text
+.
+├── src/
+│   ├── api/          # Interface Layer (FastAPI Routes)
+│   ├── domain/       # Enterprise Business Rules (Pure Python)
+│   ├── dto/          # Data Transfer Objects (Pydantic Models)
+│   ├── services/     # Application Business Rules
+│   └── utils/        # Cross-cutting concerns (Exception Handling)
+├── tests/            # Pytest suite
+└── requirements.txt
+🧪 Testing Strategy
+The project uses pytest to ensure reliability at multiple levels:
 
-### Run with sample input
-```bash
-python3 -m cli sample_input/input1.txt
-```
+Unit Tests (Isolated):
 
-### Using scripts
-- macOS/Linux:
-```bash
-./run.sh
-```
-- Windows:
-```bat
-run.bat
-```
+I focused heavily on FeeCalculatorService. By mocking the MetroCard and Transaction dependencies, I verified edge cases (e.g., "Does the 50% discount trigger exactly on the return trip?") without needing the full system state.
 
-To run another input file, update the script command to:
-```bash
-python3 -m cli sample_input/input2.txt
-```
+Integration Tests (API Level):
 
----
+These tests spin up the FastAPI TestClient to verify that valid payloads result in 200 OK and invalid ones trigger the correct Pydantic validation errors (422 Unprocessable Entity).
 
-## Quickstart (API)
+Run the full suite:
 
-### Run server
-```bash
-python3 -m uvicorn src.main:app --port 8000
-```
+Bash
 
-### Endpoints
-- **Add / set card balance**
-  - `POST /api/v1/cards/{mcid}/balance`
-  - `mcid` must match: `^MC\d+$` (example: `MC1`)
-  - body: `{"amount": 100}`
+python -m pytest
+🚀 How to Run
+Prerequisites
+Python 3.8+
 
-- **Check-in (creates a journey + charges fare)**
-  - `POST /api/v1/journey`
-  - body: `{"mcid": "MC1", "passenger_type": "ADULT", "station_name": "CENTRAL"}`
+pip install -r requirements.txt
 
-- **Summary**
-  - `GET /api/v1/summary`
-  - returns aggregated summary JSON by station
+Start the Server
+Bash
 
-### Example curl
-```bash
-curl -X POST "http://127.0.0.1:8000/api/v1/cards/MC1/balance" \
-  -H "Content-Type: application/json" \
-  -d '{"amount": 100}'
-```
+python -m uvicorn src.main:app --port 8000 --reload
+Key Endpoints
+POST /api/v1/cards/{mcid}/balance: Load balance (Idempotent).
 
-```bash
-curl -X POST "http://127.0.0.1:8000/api/v1/journey" \
-  -H "Content-Type: application/json" \
-  -d '{"mcid":"MC1","passenger_type":"ADULT","station_name":"CENTRAL"}'
-```
+POST /api/v1/journey: Check-in passenger (Triggers auto-recharge & fee calculation).
 
-```bash
-curl "http://127.0.0.1:8000/api/v1/summary"
-```
+GET /api/v1/summary: specific station reporting.
 
----
+🔮 Production Considerations
+To scale this from a sample to a production system, I would introduce:
 
-## Running tests
+Persistence Layer: Replace the in-memory dictionaries with PostgreSQL, using SQLAlchemy for ORM mapping.
 
-This repo uses **pytest**.
+Concurrency Control: Implement optimistic locking (or SELECT FOR UPDATE) on the Card entity to prevent race conditions during simultaneous check-ins.
 
-```bash
-python3 -m pytest -q
-```
-
-Run a single file:
-```bash
-python3 -m pytest tests/api/v1/endpoints_test.py -q
-```
-
----
-
-## Code organization
-
-### `src/domain/` (Domain Models)
-- **`MetroCard`**: in-memory card store + balance operations (`add_card`, `recharge`, `deduct_balance`)
-- **`Journey`**: stores journey records
-- **`Transaction`**: stores charged line-items, provides:
-  - `summary()` for **CLI** (prints formatted output)
-  - `summary_data()` for **API** (returns JSON-friendly dict)
-
-### `src/services/` (Business Logic)
-- **`MetroSystemService`**: orchestrates commands/endpoints: add card, check-in, summary
-- **`FeeCalculatorService`**:
-  - fare by passenger type (`constants.py`)
-  - return-journey discount (every 2nd trip per card)
-  - auto-recharge + transaction fee when balance is insufficient
-
-### `src/dto/` (Request DTOs)
-- **`AddBalanceRequest`** / **`CheckInRequest`**:
-  - schema validation (e.g., `mcid` must be `MC` + digits)
-  - enums for passenger and station
-
-### `src/api/v1/` (API layer)
-- **`endpoints.py`**: FastAPI routes. Note that the API currently uses **in-memory singletons** initialized at module import time.
-
-### `src/utils/`
-- **`exception_handler.py`**: shared context-manager style error mapping for endpoints.
-
----
-
-## Behavior notes (important)
-- **In-memory state**: API state lives in-process (no DB). Restarting the server resets all cards/journeys.
-- **Test isolation**: tests reload the endpoints module to reset in-memory state between test cases.
-- **Error handling**:
-  - input/schema violations => FastAPI returns 422 (request validation)
-  - domain “not found” (`Invalid Card`) => mapped to 404 via `exception_handler`
-
----
-
-## Design trade-offs (Q&A) — please fill in
-
-These are the questions I (Prasath) would answer in a real production design review.
-If you’re reviewing this repo, I can respond inline (or on a call) with the rationale.
-
-1. **State & persistence**
-   - Why choose **in-memory** storage vs a DB/repository abstraction?
-   - What’s the intended lifecycle for this service (single process vs scaled horizontally)?
-   - If we added Postgres, what would the repository boundaries be?
-
-2. **API vs CLI parity**
-   - What should be the source of truth for output formatting: JSON model vs text formatting?
-   - Should `/summary` return the same structure as the CLI summary or a richer one?
-
-3. **Validation**
-   - Why validate `mcid` both as a **path param** and inside DTOs?
-   - Should passenger/station values be strict enums, or allow extension via config?
-
-4. **Error handling**
-   - Should we use per-endpoint context managers (`exception_handler`) or FastAPI global exception handlers?
-   - Which errors should be **400 vs 404 vs 422 vs 500**?
-   - Should responses include stable error codes (e.g., `{"code": "...", "message": "..."}`) for clients?
-
-5. **Test strategy**
-   - Why use module reload for state reset vs explicit dependency injection?
-   - What additional cases are “must have” for production (idempotency, concurrency, etc.)?
-
----
-
-## References
-- (Removed GeekTrust-specific runner wording; CLI entrypoint is `cli.py`.)
+Authentication: Add an OAuth2 dependency to the FastAPI router to secure the endpoints.
