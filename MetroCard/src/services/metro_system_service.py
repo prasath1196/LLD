@@ -5,7 +5,9 @@ log = get_logger(__name__)
 
 
 class MetroSystemService:
-    def __init__(self, metro_card, journey, transaction):
+    def __init__(
+        self, metro_card, journey, transaction
+    ):  # Dependency Injection to avoid tight coupling
         self.metro_card = metro_card
         self.journey = journey
         self.transaction = transaction
@@ -23,13 +25,17 @@ class MetroSystemService:
             return self.print_summary()
 
     def add_card(self, mcid, amount):
-        self.metro_card.add_card(mcid, amount)
+        self.metro_card.add_card(
+            mcid, amount
+        )  # Service calls the domain layer to add a card
         log.info(f"Card {mcid} added with amount {amount}")
 
     def check_in(self, mcid, passenger_type, station_name):
-        journey_data = self.journey.add(mcid, passenger_type, station_name)
+        journey_data = self.journey.add(
+            mcid, passenger_type, station_name
+        )  # Service calls the domain layer to add a journey
         log.info(f"Journey added for card {mcid} at station {station_name}")
-        breakdown = self.fee_calculator_service.calculate_fee_breakdown(
+        breakdown = self.fee_calculator_service.calculate_fee_breakdown(  # Service calls the fee calculator service to calculate the fee breakdown
             journey_data, self.transaction
         )
         log.info(f"Fee breakdown Calculated: {breakdown}")

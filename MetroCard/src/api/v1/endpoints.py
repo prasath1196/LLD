@@ -17,10 +17,14 @@ metro_system_service = MetroSystemService(metro_card, journey, transaction)
 @router.post("/cards/{mcid}/balance")
 async def create_card(
     request: Request,
-    mcid: str = Path(..., pattern=r"^MC\d+$"),
-    payload: AddBalanceRequest = ...,
+    mcid: str = Path(
+        ..., pattern=r"^MC\d+$"
+    ),  # Path Parameter Validation to catch invalid MCIDs Early
+    payload: AddBalanceRequest = ...,  # Used pydantic model to validate the request body
 ):
-    with exception_handler(request):
+    with exception_handler(
+        request
+    ):  # Impmented a context manager to handle exceptions centrally
         metro_system_service.add_card(mcid, payload.amount)
         return {"message": "Balance added successfully"}
 

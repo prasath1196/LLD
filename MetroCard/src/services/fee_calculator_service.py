@@ -1,4 +1,8 @@
-from constants import TRANSACTION_FEE_PERCENTAGE, DISCOUNT_PERCENTAGE, TICKET_FARE
+from constants import (
+    TRANSACTION_FEE_PERCENTAGE,
+    DISCOUNT_PERCENTAGE,
+    TICKET_FARE,
+)  # Constants are used to avoid magic numbers and strings
 from src.utils.logger import get_logger
 
 log = get_logger(__name__)
